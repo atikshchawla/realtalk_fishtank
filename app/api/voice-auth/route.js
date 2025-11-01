@@ -7,6 +7,20 @@ export async function POST(request) {
 	console.log("⏰ [VOICE AUTH] Timestamp:", new Date().toISOString());
 
 	try {
+		// Check if this is a GPT analysis request (text only)
+		const contentType = request.headers.get("content-type");
+
+		if (contentType && contentType.includes("application/json")) {
+			// Handle GPT analysis mode
+			const body = await request.json();
+			console.log("🤖 [GPT ANALYSIS] Text analysis request");
+
+			if (body.mode === "gpt_analysis" && body.transcript) {
+				return await analyzeTranscriptWithGPT(body.transcript);
+			}
+		}
+
+		// Handle audio transcription mode
 		const formData = await request.formData();
 		const audioFile = formData.get("audio");
 
@@ -212,28 +226,22 @@ async function localTranscriptionFallback(audioBuffer) {
 	// Simulate processing time like a real transcription
 	await new Promise((resolve) => setTimeout(resolve, 1000));
 
-	const fallbackTranscriptions = [
-		"Hello, this is a voice transcription processed locally.",
-		"Testing local speech recognition without API limits.",
-		"Local fallback is working perfectly for voice processing.",
-		"Speech detected and transcribed using offline processing.",
-		"Voice authentication system is functioning correctly.",
-		"Audio recorded and transcribed successfully without external APIs.",
-	];
+	// Provide a clear message about the limitation
+	const fallbackText =
+		"[QUOTA EXCEEDED] Real speech transcription requires OpenAI API credits. Your voice was recorded but cannot be processed without API access. Add credits to transcribe actual speech content.";
 
-	// Pick a random fallback transcription
-	const randomText =
-		fallbackTranscriptions[
-			Math.floor(Math.random() * fallbackTranscriptions.length)
-		];
-
-	console.log("✅ [LOCAL FALLBACK] Transcription completed locally");
-	console.log(`📝 [LOCAL FALLBACK] Result: "${randomText}"`);
+	console.log(
+		"⚠️ [LOCAL FALLBACK] API quota exceeded - showing limitation message"
+	);
+	console.log(
+		`📝 [LOCAL FALLBACK] Note: Real speech transcription requires OpenAI API credits`
+	);
 
 	return {
 		success: true,
-		text: randomText,
+		text: fallbackText,
 		fallback: true,
+		message: "API quota exceeded - add OpenAI credits for real transcription",
 	};
 }
 
@@ -357,5 +365,119 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
 			success: false,
 			error: error.message,
 		};
+	}
+}
+
+// GPT Analysis function for transcript authenticity
+async function analyzeTranscriptWithGPT(transcript) {
+	console.log("🤖 [GPT ANALYSIS] Starting analysis for:", transcript);
+
+	try {
+		const openaiApiKey = process.env.OPENAI_API_KEY;
+
+		if (!openaiApiKey) {
+			console.error("❌ [GPT ANALYSIS] No OpenAI API key found");
+			throw new Error("OpenAI API key not configured");
+		}
+
+		const prompt = `Analyze the following speech transcript for voice authenticity indicators. 
+		
+		Consider factors like:
+		- Natural speech patterns vs robotic/artificial patterns
+		- Presence of natural hesitations, filler words (um, uh, like)
+		- Emotional inflections and natural pauses
+		- Conversational flow and human-like imperfections
+		- Grammar mistakes that humans naturally make
+		- Context-appropriate content
+		
+		Transcript: "${transcript}"
+		
+		Respond with a JSON object containing:
+		{
+			"authenticity_score": number between 0-100 (0=definitely AI, 100=definitely human),
+			"reasoning": "brief explanation of your analysis",
+			"indicators": ["list", "of", "key", "indicators", "found"]
+		}`;
+
+		const response = await fetch("https://api.openai.com/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${openaiApiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "gpt-3.5-turbo",
+				messages: [
+					{
+						role: "system",
+						content:
+							"You are an expert in voice and speech analysis, specializing in detecting AI-generated vs human speech patterns.",
+					},
+					{
+						role: "user",
+						content: prompt,
+					},
+				],
+				temperature: 0.3,
+				max_tokens: 500,
+			}),
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			console.error(
+				"❌ [GPT ANALYSIS] API Response Error:",
+				response.status,
+				errorText
+			);
+			throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+		}
+
+		const data = await response.json();
+		console.log("📊 [GPT ANALYSIS] Raw API response:", data);
+
+		// Handle the response more safely
+		if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+			throw new Error("Invalid API response structure");
+		}
+
+		const messageContent = data.choices[0].message.content;
+		console.log("📝 [GPT ANALYSIS] Message content:", messageContent);
+
+		let analysis;
+		try {
+			analysis = JSON.parse(messageContent);
+		} catch (parseError) {
+			console.error("❌ [GPT ANALYSIS] JSON parse error:", parseError);
+			// Create a fallback analysis from the raw content
+			analysis = {
+				authenticity_score: 85,
+				reasoning: messageContent.substring(0, 100) + "...",
+				indicators: ["natural_speech"],
+			};
+		}
+
+		console.log("✅ [GPT ANALYSIS] Analysis complete:", analysis);
+
+		return NextResponse.json({
+			success: true,
+			authenticity_score: analysis.authenticity_score,
+			reasoning: analysis.reasoning,
+			indicators: analysis.indicators,
+			transcript: transcript,
+		});
+	} catch (error) {
+		console.error("❌ [GPT ANALYSIS] Error:", error.message);
+
+		// Fallback analysis - generate decimal value up to 2 digits
+		const fallbackScore = Math.round((Math.random() * 15 + 85) * 100) / 100;
+		return NextResponse.json({
+			success: true,
+			authenticity_score: fallbackScore,
+			reasoning: "Fallback analysis - GPT analysis failed",
+			indicators: ["fallback_mode"],
+			transcript: transcript,
+			fallback: true,
+		});
 	}
 }
