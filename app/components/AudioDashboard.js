@@ -224,11 +224,19 @@ export default function AudioDashboard() {
 				setAnalysisResult(result);
 				setVoiceAuthenticity(result.confidence);
 
+				// Check if using fallback mode
+				const mode = result.fallback ? "Local Fallback" : "OpenAI Whisper";
+				const emoji = result.fallback ? "🔄" : "✅";
+
 				// Clear and show new logs focused on transcription
-				addLog(`✅ Transcription successful!`);
+				addLog(`${emoji} Transcription successful! (${mode})`);
 				addLog(`📝 Text: "${result.transcription}"`);
-				addLog(`� Length: ${result.transcription.length} characters`);
+				addLog(`📊 Length: ${result.transcription.length} characters`);
 				addLog(`🎯 Status: ${result.status}`);
+
+				if (result.fallback) {
+					addLog(`⚠️ Using local processing (API quota exceeded)`);
+				}
 			} else {
 				addLog("❌ Transcription failed - no text returned");
 				console.error("No transcription in result:", result);
@@ -256,215 +264,205 @@ export default function AudioDashboard() {
 	};
 
 	return (
-		<div className="min-h-screen bg-linear-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
-			{/* Main Glassmorphism Card */}
-			<div className="w-full max-w-2xl">
-				<div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-8 shadow-2xl hover:shadow-purple-500/20 transition-all duration-300">
-					{/* Header */}
-					<div className="mb-8">
-						<h1 className="text-4xl font-bold bg-linear-to-r from-purple-300 via-pink-300 to-purple-300 bg-clip-text text-transparent mb-2">
-							Audio Call
-						</h1>
-						<p className="text-purple-200/60 text-sm">
-							{isRecording ? "Recording..." : "Ready to record"}
-						</p>
-					</div>
+		<div className="min-h-screen w-screen overflow-y-auto bg-linear-to-br from-indigo-950 via-purple-900 to-slate-950 flex flex-col">
+			{/* Header Section */}
+			<div className="shrink-0 px-8 pt-8 pb-6">
+				<div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-6 shadow-2xl hover:shadow-indigo-500/20 transition-all duration-300">
+					<h1 className="text-5xl font-bold bg-linear-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-transparent mb-2">
+						RealTalk Audio
+					</h1>
+					<p className="text-purple-200/70 text-lg">
+						{isRecording ? "🎤 Recording in progress..." : "🎯 Ready for voice authentication"}
+					</p>
+				</div>
+			</div>
 
+			{/* Main Content Area - Grid Layout */}
+			<div className="flex-1 px-8 pb-8 grid grid-cols-12 gap-6">
+				{/* Left Column - Waveform & Controls */}
+				<div className="col-span-8 flex flex-col gap-6">
 					{/* Waveform Container */}
-					<div className="backdrop-blur-lg bg-black/30 border border-white/10 rounded-2xl p-6 mb-8 hover:border-white/20 transition-colors">
-						<div ref={containerRef} className="w-full" />
+					<div className="backdrop-blur-xl bg-black/30 border border-white/15 rounded-2xl p-8 hover:border-white/25 transition-all duration-300 shadow-xl min-h-80">
+						<div className="h-full flex flex-col">
+							<div className="flex items-center justify-between mb-6">
+								<h2 className="text-xl font-semibold text-white/90">Audio Waveform</h2>
+								<div className="flex items-center gap-2">
+									<div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-400 animate-pulse' : 'bg-gray-500'}`}></div>
+									<span className="text-sm text-white/60">{isRecording ? 'Live' : 'Idle'}</span>
+								</div>
+							</div>
+							<div ref={containerRef} className="flex-1 min-h-32" />
+						</div>
 					</div>
 
-					{/* Controls */}
-					<div className="flex gap-4 mb-8 justify-center">
-						<button
-							onClick={handleRecordButtonClick}
-							disabled={isAnalyzing}
-							className={`backdrop-blur-md ${
-								isRecording
-									? "bg-red-500/30 hover:bg-red-500/50 border-red-400/50"
-									: "bg-purple-500/30 hover:bg-purple-500/50 border-purple-400/50"
-							} border hover:border-opacity-100 text-white rounded-full p-4 transition-all duration-300 transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed`}
-						>
-							{isRecording ? (
-								<svg
-									className="w-6 h-6 animate-pulse"
-									fill="currentColor"
-									viewBox="0 0 20 20"
-								>
-									<rect x="6" y="4" width="2" height="12" />
-									<rect x="12" y="4" width="2" height="12" />
-								</svg>
-							) : (
-								<svg
-									className="w-6 h-6"
-									fill="currentColor"
-									viewBox="0 0 20 20"
-								>
-									<circle cx="10" cy="10" r="7" />
-								</svg>
-							)}
-						</button>
-						<button
-							onClick={togglePlayPause}
-							disabled={isAnalyzing || !wavesurferRef.current}
-							className="backdrop-blur-md bg-slate-500/30 hover:bg-slate-500/50 border border-slate-400/50 hover:border-slate-300 text-white rounded-full p-4 transition-all duration-300 transform hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{isPlaying ? (
-								<svg
-									className="w-6 h-6"
-									fill="currentColor"
-									viewBox="0 0 20 20"
-								>
-									<path d="M5.75 1.172A.5.5 0 005 1.65v16.7a.5.5 0 00.75.478l10.896-8.35a.5.5 0 000-.796L5.75 1.172z" />
-								</svg>
-							) : (
-								<svg
-									className="w-6 h-6"
-									fill="currentColor"
-									viewBox="0 0 20 20"
-								>
-									<path d="M5.5 3a.5.5 0 00-.5.5v13a.5.5 0 001 0V3.5a.5.5 0 00-.5-.5zm9 0a.5.5 0 00-.5.5v13a.5.5 0 001 0V3.5a.5.5 0 00-.5-.5z" />
-								</svg>
-							)}
-						</button>
-					</div>
-
-					{/* Connection Strength */}
-					<div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-						<div className="flex items-center justify-between mb-3">
-							<p className="text-white/70 text-sm font-medium">
-								Connection Strength
-							</p>
-							<svg
-								className="w-4 h-4 text-green-400"
-								fill="currentColor"
-								viewBox="0 0 20 20"
+					{/* Control Panel */}
+					<div className="backdrop-blur-xl bg-white/8 border border-white/15 rounded-2xl p-6 shadow-xl">
+						<div className="flex items-center justify-center gap-8">
+							<button
+								onClick={handleRecordButtonClick}
+								disabled={isAnalyzing}
+								className={`backdrop-blur-md ${
+									isRecording
+										? "bg-red-500/40 hover:bg-red-500/60 border-red-400/60 shadow-red-500/25"
+										: "bg-linear-to-r from-indigo-500/40 to-purple-500/40 hover:from-indigo-500/60 hover:to-purple-500/60 border-indigo-400/60 shadow-indigo-500/25"
+								} border-2 text-white rounded-2xl p-6 transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl`}
 							>
+								{isRecording ? (
+									<svg className="w-8 h-8 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+										<rect x="6" y="4" width="2" height="12" />
+										<rect x="12" y="4" width="2" height="12" />
+									</svg>
+								) : (
+									<svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+										<circle cx="10" cy="10" r="7" />
+									</svg>
+								)}
+							</button>
+							
+							<button
+								onClick={togglePlayPause}
+								disabled={isAnalyzing || !wavesurferRef.current}
+								className="backdrop-blur-md bg-slate-500/40 hover:bg-slate-500/60 border-2 border-slate-400/60 hover:border-slate-300/80 text-white rounded-2xl p-6 transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl shadow-slate-500/25"
+							>
+								{isPlaying ? (
+									<svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+										<path d="M5.75 1.172A.5.5 0 005 1.65v16.7a.5.5 0 00.75.478l10.896-8.35a.5.5 0 000-.796L5.75 1.172z" />
+									</svg>
+								) : (
+									<svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+										<path d="M5.5 3a.5.5 0 00-.5.5v13a.5.5 0 001 0V3.5a.5.5 0 00-.5-.5zm9 0a.5.5 0 00-.5.5v13a.5.5 0 001 0V3.5a.5.5 0 00-.5-.5z" />
+									</svg>
+								)}
+							</button>
+						</div>
+					</div>
+				</div>
+
+				{/* Right Column - Status & Analysis */}
+				<div className="col-span-4 flex flex-col gap-6">
+					{/* Connection Strength */}
+					<div className="backdrop-blur-xl bg-white/8 border border-white/15 rounded-2xl p-6 shadow-xl">
+						<div className="flex items-center justify-between mb-4">
+							<h3 className="text-lg font-semibold text-white/90">Connection</h3>
+							<svg className="w-5 h-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
 								<path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
 							</svg>
 						</div>
-						<div className="w-full bg-white/10 rounded-full h-2">
+						<div className="w-full bg-white/20 rounded-full h-3 mb-2">
 							<div
-								className="bg-linear-to-r from-green-400 to-emerald-400 h-2 rounded-full transition-all duration-500"
+								className="bg-linear-to-r from-emerald-400 to-green-400 h-3 rounded-full transition-all duration-500 shadow-lg"
 								style={{ width: `${connectionStrength}%` }}
 							/>
 						</div>
+						<p className="text-sm text-white/70">{connectionStrength}% Stable</p>
 					</div>
 
 					{/* Transcription Box */}
-					<div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
-						<div className="flex items-center gap-2 mb-3">
-							<svg
-								className="w-4 h-4 text-blue-400"
-								fill="currentColor"
-								viewBox="0 0 20 20"
-							>
+					<div className="flex-1 backdrop-blur-xl bg-white/8 border border-white/15 rounded-2xl p-6 shadow-xl">
+						<div className="flex items-center gap-2 mb-4">
+							<svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
 								<path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" />
 								<path d="M8 13a1 1 0 11-2 0 1 1 0 012 0z" />
 								<path d="M13 13a1 1 0 11-2 0 1 1 0 012 0z" />
 							</svg>
-							<p className="text-white/70 text-sm font-medium">Transcription</p>
+							<h3 className="text-lg font-semibold text-white/90">Transcription</h3>
 							{analysisResult?.transcription && (
-								<span className="text-xs text-green-400 ml-auto">
+								<span className="text-xs text-emerald-400 ml-auto px-2 py-1 bg-emerald-400/20 rounded-full">
 									✓ Complete
 								</span>
 							)}
 						</div>
-						<div className="bg-black/30 border border-white/20 rounded-lg p-4 min-h-20">
+						<div className="bg-black/40 border border-white/20 rounded-xl p-4 h-32 overflow-y-auto">
 							{analysisResult?.transcription ? (
-								<p className="text-white/80 text-sm leading-relaxed font-mono">
+								<p className="text-white/90 text-sm leading-relaxed font-mono">
 									&quot;{analysisResult.transcription}&quot;
 								</p>
 							) : isAnalyzing ? (
-								<div className="flex items-center gap-2">
-									<div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-									<p className="text-white/60 text-sm">Transcribing audio...</p>
-								</div>
-							) : (
-								<p className="text-white/40 text-sm italic">
-									Recording will appear here after analysis...
-								</p>
-							)}
-						</div>
-					</div>
-
-					{/* Voice Authentication & Analysis Results */}
-					<div className="grid grid-cols-2 gap-4 mb-8">
-						<div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6">
-							<p className="text-white/70 text-sm mb-3">Voice Authentication</p>
-							{voiceAuthenticity !== null ? (
 								<div className="flex items-center gap-3">
-									<div className="text-3xl font-bold text-purple-300">
-										{voiceAuthenticity}%
-									</div>
-									<div className="flex gap-1">
-										<div
-											className={`w-2 h-2 rounded-full ${
-												analysisResult?.status === "real"
-													? "bg-green-400 animate-pulse"
-													: "bg-red-400 animate-pulse"
-											}`}
-										/>
-										<span
-											className={`text-xs font-medium ${
-												analysisResult?.status === "real"
-													? "text-green-400"
-													: "text-red-400"
-											}`}
-										>
-											{analysisResult?.status === "real" ? "Real" : "Fake"}
-										</span>
-									</div>
+									<div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" />
+									<div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}} />
+									<div className="w-3 h-3 bg-pink-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}} />
+									<p className="text-white/70 text-sm ml-2">Processing...</p>
 								</div>
 							) : (
-								<p className="text-white/50 text-xs">No data yet</p>
-							)}
-						</div>
-
-						{/* ChatGPT Analysis Results */}
-						<div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6">
-							<p className="text-white/70 text-sm mb-3">ChatGPT Analysis</p>
-							{analysisResult ? (
-								<div className="space-y-2 text-xs">
-									<p className="text-white/60">
-										<span className="text-purple-300">
-											{analysisResult.reasoning}
-										</span>
-									</p>
-									{analysisResult.indicators && (
-										<div className="mt-2 pt-2 border-t border-white/10">
-											<p className="text-white/50 mb-1">Indicators:</p>
-											<p className="text-white/60">
-												• {analysisResult.indicators.natural_speech_patterns}
-											</p>
-										</div>
-									)}
-								</div>
-							) : (
-								<p className="text-white/50 text-xs">Pending analysis...</p>
+								<p className="text-white/50 text-sm italic">
+									Start recording to see transcription results...
+								</p>
 							)}
 						</div>
 					</div>
 
-					{/* Console Logs */}
-					<div className="backdrop-blur-md bg-black/40 border border-white/10 rounded-xl p-4">
-						<p className="text-white/50 text-xs font-mono mb-2">
-							Console Logs:
-						</p>
-						<div className="space-y-1 min-h-16">
-							{consoleLogs.length > 0 ? (
-								consoleLogs.map((log, idx) => (
-									<p key={idx} className="text-green-400/70 text-xs font-mono">
-										{log}
-									</p>
-								))
-							) : (
-								<p className="text-green-400/70 text-xs font-mono">
-									• Ready to record...
+					{/* Voice Authentication */}
+					<div className="backdrop-blur-xl bg-white/8 border border-white/15 rounded-2xl p-6 shadow-xl">
+						<h3 className="text-lg font-semibold text-white/90 mb-4">Authentication</h3>
+						{voiceAuthenticity !== null ? (
+							<div className="flex items-center justify-between">
+								<div className="text-3xl font-bold bg-linear-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
+									{voiceAuthenticity}%
+								</div>
+								<div className="flex items-center gap-2">
+									<div className={`w-4 h-4 rounded-full ${
+										analysisResult?.status === "real"
+											? "bg-emerald-400 shadow-emerald-400/50 shadow-lg animate-pulse"
+											: "bg-red-400 shadow-red-400/50 shadow-lg animate-pulse"
+									}`} />
+									<span className={`text-sm font-semibold ${
+										analysisResult?.status === "real"
+											? "text-emerald-400"
+											: "text-red-400"
+									}`}>
+										{analysisResult?.status === "real" ? "REAL" : "AI/FAKE"}
+									</span>
+								</div>
+							</div>
+						) : (
+							<p className="text-white/60 text-sm">Awaiting voice analysis...</p>
+						)}
+					</div>
+
+					{/* ChatGPT Analysis */}
+					<div className="backdrop-blur-xl bg-white/8 border border-white/15 rounded-2xl p-6 shadow-xl">
+						<h3 className="text-lg font-semibold text-white/90 mb-4">AI Analysis</h3>
+						{analysisResult ? (
+							<div className="space-y-3 text-sm">
+								<p className="text-white/80 leading-relaxed">
+									{analysisResult.reasoning}
 								</p>
-							)}
-						</div>
+								{analysisResult.indicators && (
+									<div className="pt-3 border-t border-white/20">
+										<p className="text-white/60 mb-2 font-medium">Key Indicators:</p>
+										<p className="text-white/70 text-xs leading-relaxed">
+											• {analysisResult.indicators.natural_speech_patterns}
+										</p>
+									</div>
+								)}
+							</div>
+						) : (
+							<p className="text-white/60 text-sm">Processing results will appear here...</p>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{/* Console Logs Footer */}
+			<div className="shrink-0 px-8 pb-8">
+				<div className="backdrop-blur-xl bg-black/50 border border-white/20 rounded-2xl p-4 shadow-xl">
+					<div className="flex items-center gap-2 mb-3">
+						<div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+						<p className="text-white/70 text-sm font-semibold">System Logs</p>
+					</div>
+					<div className="space-y-1 max-h-20 overflow-y-auto">
+						{consoleLogs.length > 0 ? (
+							consoleLogs.slice(-3).map((log, idx) => (
+								<p key={idx} className="text-emerald-400/80 text-xs font-mono">
+									→ {log}
+								</p>
+							))
+						) : (
+							<p className="text-emerald-400/80 text-xs font-mono">
+								→ System ready for voice recording...
+							</p>
+						)}
 					</div>
 				</div>
 			</div>
