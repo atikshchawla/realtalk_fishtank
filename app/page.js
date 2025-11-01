@@ -1,8 +1,9 @@
-import Image from "next/image";
+import AudioDashboard from "./components/AudioDashboard";
 
 export default function Home() {
-  return (<>
-  Realtalk
-  </>
-  );
+	return (
+		<>
+			<AudioDashboard />
+		</>
+	);
 }
