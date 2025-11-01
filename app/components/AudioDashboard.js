@@ -203,32 +203,39 @@ export default function AudioDashboard() {
 			const formData = new FormData();
 			formData.append("audio", audioBlob);
 
+			addLog("📤 Sending audio to Whisper API...");
+
 			const response = await fetch("/api/voice-auth", {
 				method: "POST",
 				body: formData,
 			});
+
+			addLog(`📡 API Response: ${response.status}`);
 
 			if (!response.ok) {
 				throw new Error(`API error: ${response.status}`);
 			}
 
 			const result = await response.json();
+			console.log("🎯 Full API Result:", result);
 
-			if (result.success) {
-				setVoiceAuthenticity(result.confidence);
+			if (result.success && result.transcription) {
+				// Set transcription result for the box
 				setAnalysisResult(result);
-				addLog(`📝 Transcribed: "${result.transcription.substring(0, 40)}..."`);
-				addLog(
-					`Voice: ${result.status === "real" ? "✓ Real" : "✗ AI Generated"}`
-				);
-				addLog(`💡 ${result.reasoning}`);
-				addLog(`Confidence: ${result.confidence}%`);
+				setVoiceAuthenticity(result.confidence);
+
+				// Clear and show new logs focused on transcription
+				addLog(`✅ Transcription successful!`);
+				addLog(`📝 Text: "${result.transcription}"`);
+				addLog(`� Length: ${result.transcription.length} characters`);
+				addLog(`🎯 Status: ${result.status}`);
 			} else {
-				addLog("Analysis failed");
+				addLog("❌ Transcription failed - no text returned");
+				console.error("No transcription in result:", result);
 			}
 		} catch (error) {
-			addLog(`Analysis error: ${error.message}`);
-			console.error("Analysis error:", error);
+			addLog(`❌ Error: ${error.message}`);
+			console.error("Transcription error:", error);
 		} finally {
 			setIsAnalyzing(false);
 		}
@@ -342,6 +349,43 @@ export default function AudioDashboard() {
 								className="bg-linear-to-r from-green-400 to-emerald-400 h-2 rounded-full transition-all duration-500"
 								style={{ width: `${connectionStrength}%` }}
 							/>
+						</div>
+					</div>
+
+					{/* Transcription Box */}
+					<div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-6 mb-8">
+						<div className="flex items-center gap-2 mb-3">
+							<svg
+								className="w-4 h-4 text-blue-400"
+								fill="currentColor"
+								viewBox="0 0 20 20"
+							>
+								<path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" />
+								<path d="M8 13a1 1 0 11-2 0 1 1 0 012 0z" />
+								<path d="M13 13a1 1 0 11-2 0 1 1 0 012 0z" />
+							</svg>
+							<p className="text-white/70 text-sm font-medium">Transcription</p>
+							{analysisResult?.transcription && (
+								<span className="text-xs text-green-400 ml-auto">
+									✓ Complete
+								</span>
+							)}
+						</div>
+						<div className="bg-black/30 border border-white/20 rounded-lg p-4 min-h-20">
+							{analysisResult?.transcription ? (
+								<p className="text-white/80 text-sm leading-relaxed font-mono">
+									&quot;{analysisResult.transcription}&quot;
+								</p>
+							) : isAnalyzing ? (
+								<div className="flex items-center gap-2">
+									<div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+									<p className="text-white/60 text-sm">Transcribing audio...</p>
+								</div>
+							) : (
+								<p className="text-white/40 text-sm italic">
+									Recording will appear here after analysis...
+								</p>
+							)}
 						</div>
 					</div>
 

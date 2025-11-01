@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
-import FormData from "form-data";
 
 // API endpoint for voice authentication using OpenAI
 export async function POST(request) {
+	console.log("\n" + "=".repeat(80));
+	console.log("🎤 [VOICE AUTH] New request received");
+	console.log("⏰ [VOICE AUTH] Timestamp:", new Date().toISOString());
+
 	try {
 		const formData = await request.formData();
 		const audioFile = formData.get("audio");
 
+		console.log("📦 [VOICE AUTH] FormData received");
+		console.log(
+			"🎵 [VOICE AUTH] Audio file:",
+			audioFile ? "✓ Present" : "❌ Missing"
+		);
+
 		if (!audioFile) {
+			console.error("❌ [VOICE AUTH] No audio file provided");
 			return NextResponse.json(
 				{ error: "No audio file provided" },
 				{ status: 400 }
@@ -17,38 +27,62 @@ export async function POST(request) {
 		// Convert the file to a buffer
 		const buffer = await audioFile.arrayBuffer();
 		const audioBuffer = Buffer.from(buffer);
+		console.log(
+			"💾 [VOICE AUTH] Audio buffer created, size:",
+			audioBuffer.length,
+			"bytes"
+		);
 
 		// Step 1: Transcribe audio with Whisper (includes sighs, pauses, etc)
+		console.log("\n📝 [VOICE AUTH] Step 1: Starting Whisper transcription...");
 		const transcription = await transcribeAudio(audioBuffer);
 
 		if (!transcription.success) {
+			console.error(
+				"❌ [VOICE AUTH] Transcription failed:",
+				transcription.error
+			);
 			return NextResponse.json(
 				{ error: "Transcription failed", details: transcription.error },
 				{ status: 400 }
 			);
 		}
 
-		// Step 2: Send transcription to ChatGPT for authenticity analysis
-		const analysis = await analyzeWithChatGPT(transcription.text);
+		console.log(
+			"✅ [VOICE AUTH] Transcription successful:",
+			transcription.text
+		);
 
-		if (!analysis.success) {
-			return NextResponse.json(
-				{ error: "Analysis failed", details: analysis.error },
-				{ status: 400 }
-			);
-		}
+		// For now, just return transcription without ChatGPT analysis
+		console.log("✅ [VOICE AUTH] Transcription completed successfully");
+		console.log("\n🎯 [VOICE AUTH] TRANSCRIPTION RESULT:");
+		console.log(`   Text: "${transcription.text}"`);
+		console.log(`   Length: ${transcription.text.length} characters`);
+		console.log("=".repeat(80) + "\n");
 
 		return NextResponse.json({
 			success: true,
 			transcription: transcription.text,
-			analysis: analysis.result,
-			confidence: analysis.result.confidence,
-			status: analysis.result.is_real ? "real" : "ai_generated",
-			reasoning: analysis.result.reasoning,
-			indicators: analysis.result.indicators,
+			// Temporary placeholder values for UI
+			analysis: {
+				is_real: true,
+				confidence: 90,
+				reasoning: "Transcription completed - analysis disabled for testing",
+				indicators: {
+					natural_speech_patterns: true,
+					emotional_content: true,
+					speech_flow: "natural",
+					artifacts: [],
+				},
+			},
+			confidence: 90,
+			status: "transcribed",
+			reasoning: "Transcription completed successfully",
 		});
 	} catch (error) {
-		console.error("Voice auth error:", error);
+		console.error("❌ [VOICE AUTH] Fatal error:", error.message);
+		console.error("📋 [VOICE AUTH] Stack:", error.stack);
+		console.log("=".repeat(80) + "\n");
 		return NextResponse.json(
 			{ error: "Internal server error", details: error.message },
 			{ status: 500 }
@@ -59,26 +93,96 @@ export async function POST(request) {
 // Step 1: Transcribe audio with Whisper
 async function transcribeAudio(audioBuffer) {
 	try {
-		const openaiFormData = new FormData();
-		openaiFormData.append("file", audioBuffer, {
-			filename: "audio.wav",
-			contentType: "audio/wav",
-		});
-		openaiFormData.append("model", "whisper-1");
+		console.log("🌩️  [WHISPER API] Starting transcription...");
 
+		// Verify API key exists
+		if (!process.env.OPENAI_API_KEY) {
+			console.error("❌ [WHISPER API] OPENAI_API_KEY not found in environment");
+			return {
+				success: false,
+				error: "OPENAI_API_KEY not configured",
+			};
+		}
+
+		console.log(
+			"🔑 [WHISPER API] API key found, length:",
+			process.env.OPENAI_API_KEY.length
+		);
+		console.log(
+			"📊 [WHISPER API] Audio buffer size:",
+			audioBuffer.length,
+			"bytes"
+		);
+
+		// Create multipart form manually since Node.js FormData issues
+		const boundary = `----formdata-${Date.now()}`;
+		const CRLF = "\r\n";
+
+		// Build multipart body manually
+		let body = "";
+
+		// Add model field
+		body += `--${boundary}${CRLF}`;
+		body += `Content-Disposition: form-data; name="model"${CRLF}${CRLF}`;
+		body += `whisper-1${CRLF}`;
+
+		// Add file field
+		body += `--${boundary}${CRLF}`;
+		body += `Content-Disposition: form-data; name="file"; filename="audio.wav"${CRLF}`;
+		body += `Content-Type: audio/wav${CRLF}${CRLF}`;
+
+		// Convert to buffer and combine
+		const textBuffer = Buffer.from(body, "utf8");
+		const endBuffer = Buffer.from(`${CRLF}--${boundary}--${CRLF}`, "utf8");
+		const finalBody = Buffer.concat([textBuffer, audioBuffer, endBuffer]);
+
+		console.log("📨 [WHISPER API] Sending request to OpenAI...");
+		console.log(
+			"📍 [WHISPER API] Endpoint: https://api.openai.com/v1/audio/transcriptions"
+		);
+		console.log("🎯 [WHISPER API] Model: whisper-1");
+		console.log(
+			"📦 [WHISPER API] Manual multipart, size:",
+			finalBody.length,
+			"bytes"
+		);
+
+		// TEMPORARY: Mock transcription for testing UI (remove when credits added)
+		console.log("🧪 [WHISPER API] Using mock transcription (quota exceeded)");
+
+		// Simulate API delay
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+
+		const mockText =
+			"Hello world, this is a test transcription from the mock API";
+
+		console.log("✅ [WHISPER API] Mock transcription successful");
+		console.log(`📝 [WHISPER API] Mock Result: "${mockText}"`);
+
+		return {
+			success: true,
+			text: mockText,
+		};
+
+		// REAL API CODE (uncomment when you have credits):
+		/*
 		const response = await fetch(
 			"https://api.openai.com/v1/audio/transcriptions",
 			{
 				method: "POST",
 				headers: {
 					Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+					'Content-Type': `multipart/form-data; boundary=${boundary}`,
 				},
-				body: openaiFormData,
+				body: finalBody,
 			}
 		);
 
+		console.log(`📡 [WHISPER API] Response status: ${response.status}`);
+
 		if (!response.ok) {
 			const error = await response.json();
+			console.error("❌ [WHISPER API] API Error:", error);
 			return {
 				success: false,
 				error: error.error?.message || "Transcription failed",
@@ -86,175 +190,142 @@ async function transcribeAudio(audioBuffer) {
 		}
 
 		const data = await response.json();
+		console.log("✅ [WHISPER API] Transcription successful");
+		console.log(`📝 [WHISPER API] Result: "${data.text}"`);
+
 		return {
 			success: true,
 			text: data.text,
 		};
+		*/
 	} catch (error) {
+		console.error("❌ [WHISPER API] Error:", error.message);
+		console.error("📋 [WHISPER API] Stack trace:", error.stack);
 		return {
 			success: false,
 			error: error.message,
 		};
 	}
 }
-// Analyze audio for authenticity indicators
-async function analyzeVoiceAuthenticity(audioBuffer) {
+// Step 2: Analyze transcription with ChatGPT
+async function analyzeWithChatGPT(transcription) {
 	try {
-		// Send to OpenAI for analysis using GPT vision or analyze with Whisper confidence
-		const audioContext = new (
-			typeof window !== "undefined" ? window.AudioContext : global.AudioContext
-		)();
+		console.log("🤖 [CHATGPT API] Starting analysis...");
+		console.log(`📝 [CHATGPT API] Transcription: "${transcription}"`);
 
-		// Decode audio data
-		const audioData = await audioContext.decodeAudioData(audioBuffer);
-		const channelData = audioData.getChannelData(0);
+		// Verify API key exists
+		if (!process.env.OPENAI_API_KEY) {
+			console.error("❌ [CHATGPT API] OPENAI_API_KEY not found in environment");
+			return {
+				success: false,
+				error: "OPENAI_API_KEY not configured",
+			};
+		}
 
-		// Calculate various metrics
-		const metrics = {
-			// Frequency domain analysis
-			frequency_analysis: analyzeFrequencyContent(channelData),
-			// Check for AI artifacts
-			artifacts: detectAIArtifacts(channelData),
-			// Natural speech characteristics
-			natural_speech_score: calculateNaturalSpeechScore(channelData),
-			// Emotional content detection
-			emotional_score: calculateEmotionalScore(channelData),
-		};
+		console.log(
+			"🔑 [CHATGPT API] API key found, length:",
+			process.env.OPENAI_API_KEY.length
+		);
 
-		// Determine if voice is real based on metrics
-		const realness_score = calculateRealnessScore(metrics);
+		const prompt = `Analyze this transcribed voice and determine if it's a real human voice or AI-generated.
+
+Transcription: "${transcription}"
+
+Consider these indicators:
+1. Natural hesitations (um, uh, ah)
+2. Pauses and breathing sounds
+3. Emotional variation in tone
+4. Spontaneous speech patterns
+5. Grammar imperfections
+6. Natural self-corrections
+7. Filler words and repetitions
+8. Unnatural smoothness/perfection
+
+Respond ONLY with valid JSON (no markdown, no code blocks):
+{
+  "is_real": true/false,
+  "confidence": 0-100,
+  "reasoning": "brief explanation",
+  "indicators": {
+    "natural_speech_patterns": true/false,
+    "emotional_content": true/false,
+    "speech_flow": "natural/unnatural/mixed",
+    "artifacts": []
+  }
+}`;
+
+		console.log("📨 [CHATGPT API] Sending request to OpenAI...");
+		console.log("🎯 [CHATGPT API] Model: gpt-4-turbo, Temperature: 0.3");
+
+		const response = await fetch("https://api.openai.com/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+			},
+			body: JSON.stringify({
+				model: "gpt-4-turbo",
+				messages: [
+					{
+						role: "user",
+						content: prompt,
+					},
+				],
+				temperature: 0.3,
+				max_tokens: 500,
+			}),
+		});
+
+		console.log(`📡 [CHATGPT API] Response status: ${response.status}`);
+
+		if (!response.ok) {
+			const errorData = await response.json();
+			console.error("❌ [CHATGPT API] API Error Response:", errorData);
+			return {
+				success: false,
+				error: errorData.error?.message || "ChatGPT API call failed",
+			};
+		}
+
+		const data = await response.json();
+		console.log("✅ [CHATGPT API] Response received successfully");
+		console.log(
+			"📊 [CHATGPT API] Response data:",
+			JSON.stringify(data, null, 2)
+		);
+
+		const content = data.choices[0].message.content;
+		console.log("📄 [CHATGPT API] Raw content:", content);
+
+		// Parse JSON from response
+		const jsonMatch = content.match(/\{[\s\S]*\}/);
+		if (!jsonMatch) {
+			console.error("❌ [CHATGPT API] Could not find JSON in response");
+			console.error("📋 [CHATGPT API] Full response:", content);
+			return {
+				success: false,
+				error: "Invalid JSON in ChatGPT response",
+			};
+		}
+
+		const result = JSON.parse(jsonMatch[0]);
+		console.log("✨ [CHATGPT API] Parsed result:", result);
+		console.log(
+			`🎯 [CHATGPT API] Final verdict: ${
+				result.is_real ? "✓ REAL" : "✗ AI_GENERATED"
+			} (Confidence: ${result.confidence}%)`
+		);
 
 		return {
-			is_real: realness_score > 60,
-			realness_score: Math.round(realness_score),
-			...metrics,
+			success: true,
+			result: result,
 		};
 	} catch (error) {
-		console.error("Authenticity analysis error:", error);
-		// Return default values if analysis fails
+		console.error("❌ [CHATGPT API] Error:", error.message);
+		console.error("📋 [CHATGPT API] Stack trace:", error.stack);
 		return {
-			is_real: false,
-			realness_score: 50,
-			frequency_analysis: "unknown",
-			artifacts: [],
-			natural_speech_score: 50,
-			emotional_score: 0,
+			success: false,
+			error: error.message,
 		};
 	}
-}
-
-// Analyze frequency content
-function analyzeFrequencyContent(channelData) {
-	const mean = channelData.reduce((a, b) => a + b) / channelData.length;
-	const variance =
-		channelData.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) /
-		channelData.length;
-	const stdDev = Math.sqrt(variance);
-
-	// Natural speech typically has moderate variance
-	if (stdDev > 0.1 && stdDev < 0.3) {
-		return "natural";
-	} else if (stdDev > 0.3) {
-		return "high_variation";
-	} else {
-		return "low_variation";
-	}
-}
-
-// Detect AI artifacts in audio
-function detectAIArtifacts(channelData) {
-	const artifacts = [];
-
-	// Check for repetitive patterns (common in AI-generated speech)
-	const sections = [];
-	for (let i = 0; i < channelData.length; i += 1000) {
-		const section = channelData.slice(i, i + 1000);
-		const energy = Math.sqrt(
-			section.reduce((sum, val) => sum + val * val, 0) / section.length
-		);
-		sections.push(energy);
-	}
-
-	// Calculate variance of energy sections
-	const meanEnergy = sections.reduce((a, b) => a + b) / sections.length;
-	const energyVariance =
-		sections.reduce((sq, n) => sq + Math.pow(n - meanEnergy, 2), 0) /
-		sections.length;
-
-	if (energyVariance < 0.001) {
-		artifacts.push("repetitive_energy_pattern");
-	}
-
-	// Check for unnatural silence patterns
-	let silenceCount = 0;
-	for (let i = 0; i < channelData.length; i++) {
-		if (Math.abs(channelData[i]) < 0.01) {
-			silenceCount++;
-		}
-	}
-	const silenceRatio = silenceCount / channelData.length;
-	if (silenceRatio > 0.4) {
-		artifacts.push("excessive_silence");
-	}
-
-	return artifacts;
-}
-
-// Calculate natural speech score
-function calculateNaturalSpeechScore(channelData) {
-	// Check for smooth amplitude transitions (natural speech has gradual changes)
-	let transitionScore = 0;
-	for (let i = 1; i < Math.min(1000, channelData.length); i++) {
-		const diff = Math.abs(channelData[i] - channelData[i - 1]);
-		if (diff < 0.05) {
-			transitionScore++;
-		}
-	}
-	const smoothness =
-		(transitionScore / Math.min(999, channelData.length)) * 100;
-
-	// Natural speech typically has 70-90% smooth transitions
-	return Math.max(0, Math.min(100, smoothness * 1.2));
-}
-
-// Calculate emotional content score
-function calculateEmotionalScore(channelData) {
-	// Simple heuristic: variation in amplitude indicates emotional content
-	const max = Math.max(...channelData);
-	const min = Math.min(...channelData);
-	const range = max - min;
-
-	// Natural speech has moderate range with emotion
-	if (range > 0.3 && range < 0.8) {
-		return 75;
-	} else if (range > 0.1) {
-		return 50;
-	} else {
-		return 25;
-	}
-}
-
-// Calculate overall realness score
-function calculateRealnessScore(metrics) {
-	let score = 50; // Base score
-
-	// Adjust based on frequency analysis
-	if (metrics.frequency_analysis === "natural") {
-		score += 20;
-	} else if (metrics.frequency_analysis === "low_variation") {
-		score -= 15;
-	}
-
-	// Adjust based on artifacts
-	score -= metrics.artifacts.length * 10;
-
-	// Adjust based on natural speech score
-	score += (metrics.natural_speech_score - 50) * 0.3;
-
-	// Adjust based on emotional content
-	if (metrics.emotional_score > 60) {
-		score += 10;
-	}
-
-	return Math.max(0, Math.min(100, score));
 }
